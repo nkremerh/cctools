@@ -52,16 +52,16 @@ int main(int argc, char *argv[]) {
 	}
 
 	if(strstr(argv[1], "create") != NULL && argc < 5) {
-		fprintf(stdout, "Too few arguments given for loop device creation. Needs: create <target directory> <size (i.e. 100MB)> <filesystem>\n");
+		fprintf(stderr, "Too few arguments given for loop device creation. Needs: create <target directory> <size (i.e. 100MB)> <filesystem>\n");
 		return 1;
 	}
 	else if(strstr(argv[1], "delete") != NULL && argc < 3) {
-		fprintf(stdout, "Too few arguments given for loop device deletion. Needs: delete <target directory>\n");
+		fprintf(stderr, "Too few arguments given for loop device deletion. Needs: delete <target directory>\n");
 		return 1;
 	}
 	else if(argc > 5) {
-		printf("%d\n", argc);
-		fprintf(stdout, "Too many arguments given.\n");
+		fprintf(stderr,"%d\n", argc);
+		fprintf(stderr, "Too many arguments given.\n");
 		return 1;
 	}
 
@@ -77,11 +77,11 @@ int main(int argc, char *argv[]) {
 
 		if(result != 0) {
 
-			printf("Could not create allocation.\n");
+			fprintf(stderr,"Could not create allocation.\n");
 			return 1;
 		}
 
-		printf("Allocation complete.\n");
+		fprintf(stderr,"Allocation complete.\n");
 		return 0;
 	}
 
@@ -91,17 +91,17 @@ int main(int argc, char *argv[]) {
 
 		if(result != 0) {
 
-			printf("Could not delete allocation.\n");
+			fprintf(stderr,"Could not delete allocation.\n");
 			return 1;
 		}
 
-		printf("Deallocation complete.\n");
+		fprintf(stderr,"Deallocation complete.\n");
 		return 0;
 	}
 
 	else {
 
-		printf("Invalid parameters defined.\n");
+		fprintf(stderr,"Invalid parameters defined.\n");
 		return 1;
 	}
 }

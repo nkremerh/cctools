@@ -75,7 +75,7 @@ struct work_queue_process *work_queue_process_create(struct work_queue_task *wq_
 	if(disk_allocation == 1) {
 		work_queue_process_compute_disk_needed(p);
 		if(p->task->resources_requested->disk > 0) {
-			int64_t size = (p->task->resources_requested->disk) * 1024;
+			int64_t size = (p->task->resources_requested->disk * 1024);
 			p->sandbox = string_format("t.%d", p->task->taskid);
 
 			/*if(disk_alloc_create(p->sandbox, fs, size) == 0) {
@@ -84,7 +84,7 @@ struct work_queue_process *work_queue_process_create(struct work_queue_task *wq_
 				return p;
 			}*/
 
-			char *size_str = string_format("%"PRId64"MB", size);
+			char *size_str = string_format("%"PRId64"", size);
 			char *disk_alloc_create_args[] = {"/usr/local/bin/disk_allocator", "create", p->sandbox, size_str, fs, NULL};
 			pid_t pid = fork();
 			if(pid == 0) {
@@ -97,12 +97,12 @@ struct work_queue_process *work_queue_process_create(struct work_queue_task *wq_
 					debug(D_WQ, "Failed to create loop device: %s.\n", strerror(errno));
 				}
 				p->loop_mount = 1;
-				debug(D_WQ, "disk_alloc: %"PRId64"MB\n", size);
+				debug(D_WQ, "disk_alloc: %"PRId64"MB\n", p->task->resources_requested->disk);
 				return p;
 			}
 			else {
 				debug(D_WQ, "Failed to instantiate forked process for creating loop device.\n");
-			}	
+			}
 
 
 		}
@@ -142,7 +142,25 @@ void work_queue_process_delete(struct work_queue_process *p)
 
 	if(p->sandbox) {
 		if(p->loop_mount == 1) {
-			disk_alloc_delete(p->sandbox);
+			//disk_alloc_delete(p->sandbox);
+
+			char *disk_alloc_delete_args[] = {"/usr/local/bin/disk_allocator", "delete", p->sandbox, NULL};
+			pid_t pid = fork();
+			if(pid == 0) {
+				execv(disk_alloc_delete_args[0], &disk_alloc_delete_args[0]);
+			}
+			else if(pid > 0) {
+				int status;
+				waitpid(pid, &status, 0);
+				if(!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+					debug(D_WQ, "Failed to delete loop device: %s.\n", strerror(errno));
+				}
+			}
+			else {
+				debug(D_WQ, "Failed to instantiate forked process for deleting loop device.\n");
+			}
+
+
 		}
 		else {
 			delete_dir(p->sandbox);

@@ -873,7 +873,7 @@ static int do_task( struct link *master, int taskid, time_t stoptime )
 	int flags, length;
 	int64_t n;
 	int disk_alloc = disk_allocation;
-
+	debug(D_WQ, "disk_alloc: %d", disk_alloc);
 	timestamp_t nt;
 
 	struct work_queue_task *task = work_queue_task_create(0);
@@ -1326,13 +1326,10 @@ static int enforce_processes_limits() {
 					if(!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
 						debug(D_WQ, "Failed to delete loop device: %s.\n", strerror(errno));
 					}
-					//p->loop_mount = 1;
-					//return p;
 				}
 				else {
 					debug(D_WQ, "Failed to instantiate forked process for deleting loop device.\n");
 				}
-
 
 			}
 			else {
@@ -2467,6 +2464,7 @@ int main(int argc, char *argv[])
 			break;
 		case LONG_OPT_DISK_ALLOCATION:
 		{
+			debug(D_WQ, "--disk-allocation option found.");
 			char *abs_path_preloader = string_format("%s/lib/libforce_halt_enospc.so", INSTALL_PATH);
 			int preload_result;
 			char *curr_ld_preload = getenv("LD_PRELOAD");
@@ -2487,6 +2485,7 @@ int main(int argc, char *argv[])
 				debug(D_WQ|D_NOTICE, "i/o dynamic library linking via LD_PRELOAD for loop device failed at: %"PRId64"", preload_fail_time);
 			}
 			disk_allocation = 1;
+			debug(D_WQ, "--disk-allocation option processed.");
 			break;
 		}
 		default:
