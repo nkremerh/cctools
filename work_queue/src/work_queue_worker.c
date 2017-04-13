@@ -1312,7 +1312,28 @@ static int enforce_processes_limits() {
 
 			/* we delete the sandbox, to free the exhausted resource. If a loop device is used, use remove loop device*/
 			if(p->loop_mount == 1) {
-				disk_alloc_delete(p->sandbox);
+				//disk_alloc_delete(p->sandbox);
+
+
+				char *disk_alloc_delete_args[] = {"/usr/local/bin/disk_allocator", "delete", p->sandbox, NULL};
+				pid_t pid = fork();
+				if(pid == 0) {
+					execv(disk_alloc_delete_args[0], &disk_alloc_delete_args[0]);
+				}
+				else if(pid > 0) {
+					int status;
+					waitpid(pid, &status, 0);
+					if(!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+						debug(D_WQ, "Failed to delete loop device: %s.\n", strerror(errno));
+					}
+					//p->loop_mount = 1;
+					//return p;
+				}
+				else {
+					debug(D_WQ, "Failed to instantiate forked process for deleting loop device.\n");
+				}
+
+
 			}
 			else {
 				delete_dir(p->sandbox);

@@ -78,11 +78,33 @@ struct work_queue_process *work_queue_process_create(struct work_queue_task *wq_
 			int64_t size = (p->task->resources_requested->disk) * 1024;
 			p->sandbox = string_format("t.%d", p->task->taskid);
 
-			if(disk_alloc_create(p->sandbox, fs, size) == 0) {
+			/*if(disk_alloc_create(p->sandbox, fs, size) == 0) {
+				p->loop_mount = 1;
+				debug(D_WQ, "disk_alloc: %"PRId64"MB\n", size);
+				return p;
+			}*/
+
+			char *size_str = string_format("%"PRId64"MB", size);
+			char *disk_alloc_create_args[] = {"/usr/local/bin/disk_allocator", "create", p->sandbox, size_str, fs, NULL};
+			pid_t pid = fork();
+			if(pid == 0) {
+				execv(disk_alloc_create_args[0], &disk_alloc_create_args[0]);
+			}
+			else if(pid > 0) {
+				int status;
+				waitpid(pid, &status, 0);
+				if(!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+					debug(D_WQ, "Failed to create loop device: %s.\n", strerror(errno));
+				}
 				p->loop_mount = 1;
 				debug(D_WQ, "disk_alloc: %"PRId64"MB\n", size);
 				return p;
 			}
+			else {
+				debug(D_WQ, "Failed to instantiate forked process for creating loop device.\n");
+			}	
+
+
 		}
 		if(!create_task_directories(p)) {
 			work_queue_process_delete(p);
