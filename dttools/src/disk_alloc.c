@@ -73,7 +73,6 @@ int disk_alloc_create(char *loc, char *fs, int64_t size) {
 		debug(D_NOTICE, "Failed to allocate junk space for loop device image: %s.\n", strerror(errno));
 		if(unlink(device_loc) == -1) {
 			debug(D_NOTICE, "Failed to unlink loop device image while attempting to clean up after failure: %s.\n", strerror(errno));
-			goto error;
 		}
 		if(rmdir(loc) == -1) {
 			debug(D_NOTICE, "Failed to remove directory of loop device image while attempting to clean up after failure: %s.\n", strerror(errno));
@@ -201,7 +200,6 @@ int disk_alloc_create(char *loc, char *fs, int64_t size) {
 int disk_alloc_delete(char *loc) {
 
 	int result;
-	char *losetup_args = NULL;
 	char *rm_args = NULL;
 	char *device_loc = NULL;
 	char *losetup_rm_args[] = {"/sbin/losetup", "-d", "loc", NULL};
@@ -213,15 +211,31 @@ int disk_alloc_delete(char *loc) {
 	if(result != 0) {
 		char *pwd = get_current_dir_name();
 		path_remove_trailing_slashes(pwd);
-		device_loc = string_format("%s/%s/alloc.img", pwd, loc);
+		device_loc = string_format("%s/%s", pwd, loc);
 		free(pwd);
 	}
 	else {
-		device_loc = string_format("%s/alloc.img", loc);
+		device_loc = string_format("%s", loc);
 	}
 
 	//Find Used Device
-	char *dev_num = "-1";
+	char *dev_num = NULL;
+	FILE *loop_find;
+	loop_find = fopen("/proc/mounts", "r");
+	char line[1024];
+	while(fgets(line, 1024, loop_find) != NULL) {
+		char *token = strtok(line, " ");
+		char *prev_token;
+		while(token != NULL) {
+			if(strcmp(device_loc, token) == 0) {
+				dev_num = prev_token;
+				break;
+			}
+			prev_token = token;
+			token = strtok(NULL, " ");
+		}
+	}
+	fclose(loop_find);
 
 	//Loop Device Unmounted
 	result = umount2(loc, MNT_FORCE);
@@ -232,33 +246,8 @@ int disk_alloc_delete(char *loc) {
 		}
 	}
 
-	//Find pathname of mountpoint associated with loop device
-	char loop_dev[128], loop_info[128], loop_mount[128];
-	FILE *loop_find;
-	losetup_args = string_format("losetup -j %s", device_loc);
-	loop_find = popen(losetup_args, "r");
-	fscanf(loop_find, "%s %s %s", loop_dev, loop_info, loop_mount);
-	pclose(loop_find);
-	int loop_dev_path_length = strlen(loop_mount);
-	loop_mount[loop_dev_path_length - 1] = '\0';
-	loop_dev[strlen(loop_dev) - 1] = '\0';
-	char loop_mountpoint_array[128];
-	int k;
-	int max_mount_path_length = 62;
-
-	//Copy only pathname of the mountpoint without extraneous paretheses
-	for(k = 1; k < loop_dev_path_length; k++) {
-		loop_mountpoint_array[k-1] = loop_mount[k];
-	}
-	loop_mountpoint_array[k] = '\0';
-
-	if(strncmp(loop_mountpoint_array, device_loc, max_mount_path_length) == 0) {
-
-		dev_num = loop_dev;
-	}
-
 	//Device Not Found
-	if(strcmp(dev_num, "-1") == 0) {
+	if(dev_num == NULL) {
 		debug(D_NOTICE, "Failed to locate loop device associated with given mountpoint: %s.\n", strerror(errno));
 		goto error;
 	}
@@ -298,16 +287,16 @@ int disk_alloc_delete(char *loc) {
 		goto error;
 	}
 
-	free(losetup_args);
+	//free(losetup_args);
 	free(rm_args);
 	free(device_loc);
 
 	return 0;
 
 	error:
-		if(losetup_args) {
+		/*if(losetup_args) {
 			free(losetup_args);
-		}
+		}*/
 		if(rm_args) {
 			free(rm_args);
 		}
