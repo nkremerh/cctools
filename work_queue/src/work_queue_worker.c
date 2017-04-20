@@ -935,6 +935,7 @@ static int do_task( struct link *master, int taskid, time_t stoptime )
 	struct work_queue_process *p = work_queue_process_create(task, disk_alloc);
 
 	if(!p) {
+		debug(D_WQ, "Process not created successfully.\n");
 		return 0;
 	}
 
@@ -947,6 +948,7 @@ static int do_task( struct link *master, int taskid, time_t stoptime )
 		// XXX sandbox setup should be done in task execution,
 		// so that it can be returned cleanly as a failure to execute.
 		if(!setup_sandbox(p)) {
+			debug(D_WQ, "Process sandbox not set up successfully.\n");
 			itable_remove(procs_table,taskid);
 			work_queue_process_delete(p);
 			return 0;
@@ -1314,11 +1316,15 @@ static int enforce_processes_limits() {
 			if(p->loop_mount == 1) {
 				//disk_alloc_delete(p->sandbox);
 
-
+				int result;
+				//char *disk_alloc_delete_args[] = {"/usr/local/bin/disk_allocator", "delete", p->sandbox, NULL};
 				char *disk_alloc_delete_args[] = {"/usr/local/bin/disk_allocator", "delete", p->sandbox, NULL};
 				pid_t pid = fork();
 				if(pid == 0) {
-					execv(disk_alloc_delete_args[0], &disk_alloc_delete_args[0]);
+					result = execv(disk_alloc_delete_args[0], &disk_alloc_delete_args[0]);
+					if(result) {
+						debug(D_WQ, "Failed to delete loop device: %s.\n", strerror(errno));
+					}
 				}
 				else if(pid > 0) {
 					int status;

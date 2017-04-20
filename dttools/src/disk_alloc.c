@@ -36,7 +36,6 @@ int disk_alloc_create(char *loc, char *fs, int64_t size) {
 	path_remove_trailing_slashes(loc);
 	int result;
 	char *device_loc = NULL;
-	char *dd_args[] = {"/bin/dd", "if=/dev/zero", "of", "bs=1024", "count", NULL};
 	char *losetup_args[] = {"/sbin/losetup", "dev_num", "location", NULL};
 	char *losetup_rm_args[] = {"/sbin/losetup", "-d", "loc", NULL};
 	char *mkfs_args[] = {"/sbin/mkfs", "dev_num", "-t=", NULL};
@@ -45,42 +44,20 @@ int disk_alloc_create(char *loc, char *fs, int64_t size) {
 	//Set Loopback Device Location
 	device_loc = string_format("%s/alloc.img", loc);
 	//Make Directory for Loop Device
-	if(mkdir(loc, 0777) != 0) {
+	if(mkdir(loc, 0755) != 0) {
 		debug(D_NOTICE, "Failed to make directory at requested mountpoint: %s.\n", strerror(errno));
 		goto error;
 	}
 
 	//Create Image
-	char *dd_arg = string_format("of=%s", device_loc);
-	dd_args[2] = dd_arg;
-	dd_arg = string_format("count=%"PRId64"", size);
-	dd_args[4] = dd_arg;
-
-	pid_t pid = fork();
-	if(pid == 0) {
-		execv(dd_args[0], &dd_args[0]);
-	}
-	else if(pid > 0) {
-		int status;
-		waitpid(pid, &status, 0);
-	}
-	else {
-		debug(D_NOTICE, "Failed to instantiate forked process for allocating junk space.\n");
-	}
-
-	int img_fd = open(device_loc, O_RDONLY);
-	if(img_fd == -1) {
-		debug(D_NOTICE, "Failed to allocate junk space for loop device image: %s.\n", strerror(errno));
-		if(unlink(device_loc) == -1) {
-			debug(D_NOTICE, "Failed to unlink loop device image while attempting to clean up after failure: %s.\n", strerror(errno));
-		}
-		if(rmdir(loc) == -1) {
-			debug(D_NOTICE, "Failed to remove directory of loop device image while attempting to clean up after failure: %s.\n", strerror(errno));
-		}
-		goto error;
+	int img_fd = open(device_loc, O_CREAT|O_WRONLY);
+	result = ftruncate(img_fd, (off_t) size * 1024);
+	if(result == -1) {
+		debug(D_NOTICE, "Failed to allocate junk space for loop device image: %s\n", strerror(errno));
 	}
 	close(img_fd);
 
+	pid_t pid;
 	char *loop_dev_num = NULL;
 	//Attach Image to Loop Device
 	int j, losetup_flag = 0;
@@ -106,7 +83,11 @@ int disk_alloc_create(char *loc, char *fs, int64_t size) {
 	
 		pid = fork();
 		if(pid == 0) {
-			execv(losetup_args[0], &losetup_args[0]);
+			result = execv(losetup_args[0], &losetup_args[0]);
+			if(result) {
+				debug(D_NOTICE, "Failed to attach image to loop device: %s\n", strerror(errno));
+				goto error;
+			}
 		}
 		else if(pid > 0) {
 			int status;
@@ -135,7 +116,11 @@ int disk_alloc_create(char *loc, char *fs, int64_t size) {
 	//Create Filesystem
 	pid = fork();
 	if(pid == 0) {
-		execv(mkfs_args[0], &mkfs_args[0]);
+		result = execv(mkfs_args[0], &mkfs_args[0]);
+		if(result) {
+			debug(D_NOTICE, "Failed to initialize filesystem on loop device: %s\n", strerror(errno));
+			goto error;
+		}
 	}
 	else if(pid > 0) {
 		int status;
@@ -146,7 +131,11 @@ int disk_alloc_create(char *loc, char *fs, int64_t size) {
 			losetup_rm_args[2] = losetup_rm_arg;
 			pid_t pid2 = fork();
 			if(pid2 == 0) {
-				execv(losetup_rm_args[0], &losetup_rm_args[0]);
+				result = execv(losetup_rm_args[0], &losetup_rm_args[0]);
+				if(result) {
+					debug(D_NOTICE, "Failed to detach loop device and remove its contents while attempting to clean up after failure: %s\n", strerror(errno));
+					goto error;
+				}
 			}
 			else if(pid2 > 0) {
 				int status;
@@ -173,7 +162,11 @@ int disk_alloc_create(char *loc, char *fs, int64_t size) {
 		debug(D_NOTICE, "Failed to mount loop device: %s.\n", strerror(errno));
 		pid_t pid2 = fork();
 		if(pid2 == 0) {
-			execv(losetup_rm_args[0], &losetup_rm_args[0]);
+			result = execv(losetup_rm_args[0], &losetup_rm_args[0]);
+			if(result) {
+				debug(D_NOTICE, "Failed to detach loop device and remove its contents while attempting to clean up after failure: %s\n", strerror(errno));
+				goto error;
+			}
 		}
 		else if(pid2 > 0) {
 			int status;
@@ -188,7 +181,31 @@ int disk_alloc_create(char *loc, char *fs, int64_t size) {
 			debug(D_NOTICE, "Failed to instantiate forked process for detaching loop device and removing its contents.\n");
 		}
 	}
-
+	result = chmod(loc, 01777);
+	if(result != 0) {
+		debug(D_NOTICE, "Failed to set permissions for loop device: %s.\n", strerror(errno));
+		pid_t pid2 = fork();
+		if(pid2 == 0) {
+			result = execv(losetup_rm_args[0], &losetup_rm_args[0]);
+			if(result) {
+				debug(D_NOTICE, "Failed to detach loop device and remove its contents while attempting to clean up after failure: %s\n", strerror(errno));
+				goto error;
+			}
+		}
+		else if(pid2 > 0) {
+			int status;
+			waitpid(pid, &status, 0);
+			if(!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+				debug(D_NOTICE, "Failed to detach loop device and remove its contents while attempting to clean up after failure: %s.\n", strerror(errno));
+				rmdir(loc);
+				goto error;
+			}
+		}
+		else {
+			debug(D_NOTICE, "Failed to instantiate forked process for detaching loop device and removing its contents.\n");
+		}
+	}
+	
 	free(device_loc);
 	free(loop_dev_num);
 	return 0;
@@ -258,7 +275,11 @@ int disk_alloc_delete(char *loc) {
 	losetup_rm_args[2] = dev_num;
 	pid_t pid = fork();
 	if(pid == 0) {
-		execv(losetup_rm_args[0], &losetup_rm_args[0]);
+		result = execv(losetup_rm_args[0], &losetup_rm_args[0]);
+		if(result) {
+			debug(D_NOTICE, "Failed to detach loop device and remove its contents: %s\n", strerror(errno));
+			goto error;
+		}
 	}
 	else if(pid > 0) {
 		int status;

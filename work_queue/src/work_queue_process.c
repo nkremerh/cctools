@@ -83,12 +83,16 @@ struct work_queue_process *work_queue_process_create(struct work_queue_task *wq_
 				debug(D_WQ, "disk_alloc: %"PRId64"MB\n", size);
 				return p;
 			}*/
-
+			int result;
 			char *size_str = string_format("%"PRId64"", size);
+			//char *disk_alloc_create_args[] = {"/usr/local/bin/disk_allocator", "create", p->sandbox, size_str, fs, NULL};
 			char *disk_alloc_create_args[] = {"/usr/local/bin/disk_allocator", "create", p->sandbox, size_str, fs, NULL};
 			pid_t pid = fork();
 			if(pid == 0) {
-				execv(disk_alloc_create_args[0], &disk_alloc_create_args[0]);
+				result = execv(disk_alloc_create_args[0], &disk_alloc_create_args[0]);
+				if(result) {
+					debug(D_WQ, "Failed to create loop device: %s.\n", strerror(errno));
+				}
 			}
 			else if(pid > 0) {
 				int status;
@@ -142,12 +146,17 @@ void work_queue_process_delete(struct work_queue_process *p)
 
 	if(p->sandbox) {
 		if(p->loop_mount == 1) {
+			int result;
 			//disk_alloc_delete(p->sandbox);
 
+			//char *disk_alloc_delete_args[] = {"/usr/local/bin/disk_allocator", "delete", p->sandbox, NULL};
 			char *disk_alloc_delete_args[] = {"/usr/local/bin/disk_allocator", "delete", p->sandbox, NULL};
 			pid_t pid = fork();
 			if(pid == 0) {
-				execv(disk_alloc_delete_args[0], &disk_alloc_delete_args[0]);
+				result = execv(disk_alloc_delete_args[0], &disk_alloc_delete_args[0]);
+				if(result) {
+					debug(D_WQ, "Failed to delete loop device: %s.\n", strerror(errno));
+				}
 			}
 			else if(pid > 0) {
 				int status;
