@@ -20,6 +20,7 @@ See the file COPYING for details.
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <attr/xattr.h>
 
 #include "disk_alloc.h"
 #include "stringtools.h"
@@ -35,6 +36,7 @@ int disk_alloc_create(char *loc, char *fs, int64_t size) {
 	//Check for trailing '/'
 	path_remove_trailing_slashes(loc);
 	int result;
+	char *cctools_xattr = "y";
 	char *device_loc = NULL;
 	char *losetup_args[] = {"/sbin/losetup", "dev_num", "location", NULL};
 	char *losetup_rm_args[] = {"/sbin/losetup", "-d", "loc", NULL};
@@ -181,6 +183,12 @@ int disk_alloc_create(char *loc, char *fs, int64_t size) {
 			debug(D_NOTICE, "Failed to instantiate forked process for detaching loop device and removing its contents.\n");
 		}
 	}
+
+	if (setxattr(loc, "trusted.cctools", cctools_xattr, strlen(cctools_xattr) + 1, 0) == -1) {
+		debug(D_NOTICE, "Failed to set tag on mountpoint: %s\n", strerror(errno));
+		goto error;
+	}
+
 	result = chmod(loc, 01777);
 	if(result != 0) {
 		debug(D_NOTICE, "Failed to set permissions for loop device: %s.\n", strerror(errno));
@@ -217,6 +225,7 @@ int disk_alloc_create(char *loc, char *fs, int64_t size) {
 int disk_alloc_delete(char *loc) {
 
 	int result;
+	char cctools_xattr[8];
 	char *rm_args = NULL;
 	char *device_loc = NULL;
 	char *losetup_rm_args[] = {"/sbin/losetup", "-d", "loc", NULL};
@@ -242,7 +251,7 @@ int disk_alloc_delete(char *loc) {
 	char line[1024];
 	while(fgets(line, 1024, loop_find) != NULL) {
 		char *token = strtok(line, " ");
-		char *prev_token;
+		char *prev_token = NULL;
 		while(token != NULL) {
 			if(strcmp(device_loc, token) == 0) {
 				dev_num = prev_token;
@@ -254,6 +263,21 @@ int disk_alloc_delete(char *loc) {
 	}
 	fclose(loop_find);
 
+	//Device Not Found
+	if(dev_num == NULL) {
+		debug(D_NOTICE, "Failed to locate loop device associated with given mountpoint: %s.\n", strerror(errno));
+		goto error;
+	}
+
+	if (getxattr(loc, "trusted.cctools", cctools_xattr, sizeof(cctools_xattr)) == -1) {
+		debug(D_NOTICE, "Loop device was not created with disk_allocator: %s\n", strerror(errno));
+		goto error;
+	}
+	if (strcmp(cctools_xattr, "y")) {
+		debug(D_NOTICE, "Loop device has invalid tag\n");
+		goto error;
+	}
+
 	//Loop Device Unmounted
 	result = umount2(loc, MNT_FORCE);
 	if(result != 0) {
@@ -261,12 +285,6 @@ int disk_alloc_delete(char *loc) {
 			debug(D_NOTICE, "Failed to unmount loop device: %s.\n", strerror(errno));
 			goto error;
 		}
-	}
-
-	//Device Not Found
-	if(dev_num == NULL) {
-		debug(D_NOTICE, "Failed to locate loop device associated with given mountpoint: %s.\n", strerror(errno));
-		goto error;
 	}
 
 	rm_args = string_format("%s/alloc.img", loc);
