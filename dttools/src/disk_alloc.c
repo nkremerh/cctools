@@ -245,6 +245,7 @@ int disk_alloc_delete(char *loc) {
 		device_loc = string_format("%s", loc);
 	}
 	debug(D_WQ, "Loop device location: %s.\n", device_loc);
+	chdir("/");
 
 	//Find Used Device
 	char *dev_num = NULL;
@@ -283,7 +284,7 @@ int disk_alloc_delete(char *loc) {
 	}
 
 	//Loop Device Unmounted
-	result = umount2(loc, MNT_DETACH);
+	result = umount2(loc, 0);
 	if(result != 0) {
 		if(errno != ENOENT) {
 			debug(D_NOTICE, "Failed to unmount loop device: %s.\n", strerror(errno));
