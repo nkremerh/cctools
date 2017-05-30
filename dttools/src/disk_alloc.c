@@ -46,6 +46,7 @@ int disk_alloc_create(char *loc, char *fs, int64_t size) {
 	//Set Loopback Device Location
 	device_loc = string_format("%s/alloc.img", loc);
 	//Make Directory for Loop Device
+	debug(D_NOTICE, "Location for loop device: %s\n", loc);
 	if(mkdir(loc, 0755) != 0) {
 		debug(D_NOTICE, "Failed to make directory at requested mountpoint: %s.\n", strerror(errno));
 		goto error;
@@ -243,6 +244,7 @@ int disk_alloc_delete(char *loc) {
 	else {
 		device_loc = string_format("%s", loc);
 	}
+	debug(D_WQ, "Loop device location: %s.\n", device_loc);
 
 	//Find Used Device
 	char *dev_num = NULL;
@@ -269,6 +271,8 @@ int disk_alloc_delete(char *loc) {
 		goto error;
 	}
 
+	debug(D_WQ, "Loop device for task found at device number %s for device location %s.\n", dev_num, device_loc);
+
 	if (getxattr(loc, "trusted.cctools", cctools_xattr, sizeof(cctools_xattr)) == -1) {
 		debug(D_NOTICE, "Loop device was not created with disk_allocator: %s\n", strerror(errno));
 		goto error;
@@ -279,7 +283,7 @@ int disk_alloc_delete(char *loc) {
 	}
 
 	//Loop Device Unmounted
-	result = umount2(loc, MNT_FORCE);
+	result = umount2(loc, MNT_DETACH);
 	if(result != 0) {
 		if(errno != ENOENT) {
 			debug(D_NOTICE, "Failed to unmount loop device: %s.\n", strerror(errno));

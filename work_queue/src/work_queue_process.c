@@ -87,18 +87,19 @@ struct work_queue_process *work_queue_process_create(struct work_queue_task *wq_
 			char *size_str = string_format("%"PRId64"", size);
 			//char *disk_alloc_create_args[] = {"/usr/local/bin/disk_allocator", "create", p->sandbox, size_str, fs, NULL};
 			char *disk_alloc_create_args[] = {"/usr/local/bin/disk_allocator", "create", p->sandbox, size_str, fs, NULL};
+			debug(D_WQ, "Loop device using %s as sandbox mountpoint.\n", p->sandbox);
 			pid_t pid = fork();
 			if(pid == 0) {
 				result = execv(disk_alloc_create_args[0], &disk_alloc_create_args[0]);
 				if(result) {
-					debug(D_WQ, "Failed to create loop device: %s.\n", strerror(errno));
+					debug(D_WQ, "Trap 1: Failed to create loop device: %s.\n", strerror(errno));
 				}
 			}
 			else if(pid > 0) {
 				int status;
 				waitpid(pid, &status, 0);
 				if(!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-					debug(D_WQ, "Failed to create loop device: %s.\n", strerror(errno));
+					debug(D_WQ, "Trap 2: Failed to create loop device: %s.\n", strerror(errno));
 				}
 				p->loop_mount = 1;
 				debug(D_WQ, "disk_alloc: %"PRId64"MB\n", p->task->resources_requested->disk);
