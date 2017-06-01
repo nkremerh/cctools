@@ -274,7 +274,7 @@ int disk_alloc_delete(char *loc) {
 
 	debug(D_WQ, "Loop device for task found at device number %s for device location %s.\n", dev_num, device_loc);
 
-	if (getxattr(loc, "trusted.cctools", cctools_xattr, sizeof(cctools_xattr)) == -1) {
+	if (getxattr(device_loc, "trusted.cctools", cctools_xattr, sizeof(cctools_xattr)) == -1) {
 		debug(D_NOTICE, "Loop device was not created with disk_allocator: %s\n", strerror(errno));
 		goto error;
 	}
@@ -283,8 +283,11 @@ int disk_alloc_delete(char *loc) {
 		goto error;
 	}
 
+	char *lsof_cmd = string_format("/usr/sbin/lsof +D %s > /disk/d11/nkremerh/%s.lsofers", device_loc, loc);
+	system(lsof_cmd);
+
 	//Loop Device Unmounted
-	result = umount2(loc, 0);
+	result = umount2(device_loc, MNT_DETACH);
 	if(result != 0) {
 		if(errno != ENOENT) {
 			debug(D_NOTICE, "Failed to unmount loop device: %s.\n", strerror(errno));
@@ -292,7 +295,7 @@ int disk_alloc_delete(char *loc) {
 		}
 	}
 
-	rm_args = string_format("%s/alloc.img", loc);
+	rm_args = string_format("%s/alloc.img", device_loc);
 
 	//Loop Device Deleted
 	losetup_rm_args[2] = dev_num;
@@ -309,7 +312,7 @@ int disk_alloc_delete(char *loc) {
 		waitpid(pid, &status, 0);
 		if((!WIFEXITED(status) || WEXITSTATUS(status) != 0) && errno != ENOENT) {
 			debug(D_NOTICE, "Failed to detach loop device and remove its contents: %s.\n", strerror(errno));
-			rmdir(loc);
+			rmdir(device_loc);
 			goto error;
 		}
 	}
@@ -325,7 +328,7 @@ int disk_alloc_delete(char *loc) {
 	}
 
 	//Directory Deleted
-	result = rmdir(loc);
+	result = rmdir(device_loc);
 	if(result != 0) {
 		debug(D_NOTICE, "Failed to delete directory associated with given mountpoint: %s.\n", strerror(errno));
 		goto error;

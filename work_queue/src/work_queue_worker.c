@@ -649,8 +649,10 @@ static int handle_tasks(struct link *master)
 				if(p->loop_mount == 1 && (loop_full_check = fopen(disk_alloc_filename, "r"))) {
 					p->task_status = WORK_QUEUE_RESULT_DISK_ALLOC_FULL;
 					p->task->disk_allocation_exhausted = 1;
-					fclose(loop_full_check);
 					unlink(disk_alloc_filename);
+				}
+				if(loop_full_check) {
+					fclose(loop_full_check);
 				}
 
 				free(buf);
@@ -684,6 +686,9 @@ static int handle_tasks(struct link *master)
 					debug(D_WQ, "could not rename output file %s to %s: %s",sandbox_name,f->payload,strerror(errno));
 					if(copy_file_to_file(sandbox_name, f->payload)  == -1) {
 						debug(D_WQ, "could not copy output file %s to %s: %s",sandbox_name,f->payload,strerror(errno));
+					}
+					else {
+						debug(D_WQ, "attempting copy of output file %s to %s: %s",sandbox_name,f->payload,strerror(errno));	
 					}
 				}
 
@@ -873,7 +878,6 @@ static int do_task( struct link *master, int taskid, time_t stoptime )
 	int flags, length;
 	int64_t n;
 	int disk_alloc = disk_allocation;
-	debug(D_WQ, "disk_alloc: %d", disk_alloc);
 	timestamp_t nt;
 
 	struct work_queue_task *task = work_queue_task_create(0);
@@ -1220,7 +1224,7 @@ static int do_kill(int taskid)
 	list_remove(procs_waiting,p);
 
 	work_queue_watcher_remove_process(watcher,p);
-
+	debug(D_NOTICE, "do_kill received for task %d.", taskid);
 	work_queue_process_delete(p);
 
 	return 1;
@@ -1527,6 +1531,28 @@ void forsake_waiting_process(struct link *master, struct work_queue_process *p) 
 	itable_insert(procs_complete, p->task->taskid, p);
 
 	debug(D_WQ, "Waiting task %d has been forsaken.", p->task->taskid);
+
+	if(p->loop_mount == 1) {
+		int result;
+		char *disk_alloc_delete_args[] = {"/usr/local/bin/disk_allocator", "delete", p->sandbox, NULL};
+		pid_t pid = fork();
+		if(pid == 0) {
+			result = execv(disk_alloc_delete_args[0], &disk_alloc_delete_args[0]);
+			if(result) {
+				debug(D_WQ, "Failed to delete loop device: %s.\n", strerror(errno));
+			}
+		}
+		else if(pid > 0) {
+			int status;
+			waitpid(pid, &status, 0);
+			if(!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
+				debug(D_WQ, "Failed to delete loop device: %s.\n", strerror(errno));
+			}
+		}
+		else {
+			debug(D_WQ, "Failed to instantiate forked process for deleting loop device.\n");
+		}
+	}
 
 	/* we also send updated resources to the master. */
 	send_keepalive(master, 1);

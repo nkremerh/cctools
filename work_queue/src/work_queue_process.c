@@ -92,17 +92,17 @@ struct work_queue_process *work_queue_process_create(struct work_queue_task *wq_
 			if(pid == 0) {
 				result = execv(disk_alloc_create_args[0], &disk_alloc_create_args[0]);
 				if(result) {
-					debug(D_WQ, "Trap 1: Failed to create loop device: %s.\n", strerror(errno));
+					debug(D_WQ, "Failed to create loop device: %s.\n", strerror(errno));
 				}
 			}
 			else if(pid > 0) {
 				int status;
 				waitpid(pid, &status, 0);
 				if(!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-					debug(D_WQ, "Trap 2: Failed to create loop device: %s.\n", strerror(errno));
+					debug(D_WQ, "Failed to create loop device: %s.\n", strerror(errno));
 				}
 				p->loop_mount = 1;
-				debug(D_WQ, "disk_alloc: %"PRId64"MB\n", p->task->resources_requested->disk);
+				debug(D_WQ, "disk_alloc: %"PRId64"\n", p->task->resources_requested->disk);
 				return p;
 			}
 			else {
@@ -143,6 +143,10 @@ void work_queue_process_delete(struct work_queue_process *p)
 	if(p->output_file_name) {
 		unlink(p->output_file_name);
 		free(p->output_file_name);
+	}
+	
+	if(p->loop_mount == 1 && !p->sandbox) {
+		debug(D_NOTICE, "Loop device used without sandbox properly set.");
 	}
 
 	if(p->sandbox) {
