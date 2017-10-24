@@ -31,7 +31,7 @@ static int getfullpath (int dirfd, const char *path, char fullpath[PATH_MAX])
 #if defined(CCTOOLS_OPSYS_DARWIN)
 		if (fcntl(dirfd, F_GETPATH, dirpath) == -1)
 			return -1;
-#elif defined(CCTOOLS_OPSYS_LINUX)
+#elif defined(CCTOOLS_OPSYS_LINUX) || defined(CCTOOLS_OPSYS_CYGWIN)
 		char dirpath[PATH_MAX];
 		char procpath[PATH_MAX];
 		snprintf(procpath, PATH_MAX, "/proc/self/fd/%d", dirfd);
