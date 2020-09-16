@@ -798,6 +798,7 @@ struct jx *jx_function_select(struct jx *args, struct jx *ctx) {
 		result = make_error(func, args, "2 arguments required");
 		goto FAILURE;
 	}
+	fprintf(stderr, "got JX type: %s - %s\n", jx_type_string(objlist->type), jx_print_string(objlist));
 
 	result = jx_eval(objlist, ctx);
 	assert(result);
@@ -807,6 +808,7 @@ struct jx *jx_function_select(struct jx *args, struct jx *ctx) {
 
 	if (!jx_istype(result, JX_ARRAY)) {
 		jx_delete(result);
+		fprintf(stderr, "result type: %s - %s\n", jx_type_string(result->type), jx_print_string(result));
 		result = make_error(func, args, "list of objects required");
 		goto FAILURE;
 	}
@@ -862,12 +864,14 @@ struct jx *jx_function_project(struct jx *args, struct jx *ctx) {
 	struct jx *j = NULL;
 	struct jx *new_ctx = NULL;
 
+	fprintf(stderr, "project args: %s\n", jx_print_string(args));
 	struct jx *val = jx_array_shift(args);
 	struct jx *objlist = jx_array_shift(args);
 	if (jx_array_length(args) != 0) {
 		result = make_error(func, args, "2 arguments required");
 		goto FAILURE;
 	}
+	fprintf(stderr, "got JX type: %s - %s\n", jx_type_string(objlist->type), jx_print_string(objlist));
 
 	result = jx_eval(objlist, ctx);
 	assert(result);
@@ -877,6 +881,7 @@ struct jx *jx_function_project(struct jx *args, struct jx *ctx) {
 
 	if (!jx_istype(result, JX_ARRAY)) {
 		jx_delete(result);
+		fprintf(stderr, "result type: %s - %s\n", jx_type_string(result->type), jx_print_string(result));
 		result = make_error(func, args, "list of objects required");
 		goto FAILURE;
 	}
@@ -928,6 +933,7 @@ struct jx *jx_function_schema(struct jx *args) {
 		result = make_error(func, args, "1 argument required");
 		goto FAILURE;
 	}
+	fprintf(stderr, "got JX type: %s - %s\n", jx_type_string(objlist->type), jx_print_string(objlist));
 	if (!jx_istype(objlist, JX_ARRAY)) {
 		result = make_error(func, args, "list of objects required");
 		goto FAILURE;

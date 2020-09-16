@@ -89,7 +89,7 @@ const char * jx_type_string( jx_type_t type )
 		case JX_OBJECT: return "object";
 		case JX_OPERATOR: return "operator";
 		case JX_ERROR: return "error";
-		default: return "???";
+		default: return "unknown type";
 	}
 }
 
